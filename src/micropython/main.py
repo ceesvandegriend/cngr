@@ -6,73 +6,153 @@ Date:        2022-05-13
 Description: A sample MicroPython appliction for a Raspberry Pico. 
 """
 
-from machine import Pin, RTC
-import utime
+from machine import Pin, Timer
+
 import sys
+import select
+import time
 
-from board import name as board_name
 
-_author = 'Cees van de Griend <cees@griend.eu>'
-_name = 'blink'
-_version = 'v0.1'
+_debug_ = False
 
-rtc = RTC()
+line = ''
+
 led = Pin(25, Pin.OUT)
-light = 0
+blink_msec = 500
+timer = Timer()
+
+poll = select.poll()
+poll.register(sys.stdin, select.POLLIN)
 
 
-def light_on():
-    global rtc, led, light
+def _read():
+    return(sys.stdin.read(1) if poll.poll(0) else None)
 
-    now = rtc.datetime()
-    light = 1
-    print(f'{now[0]:04n}-{now[1]:02n}-{now[2]:02n} {now[4]:02n}:{now[5]:02n}:{now[6]:02n} - Light: {light}')
+
+def readln():
+    global line
+
+    eol = False
+    ch = _read()
+
+    if (ch):
+        if (ch) == '\n':
+            eol = True
+        else:
+            line += ch
+
+    return eol
+
+
+
+def blink(timer):
+    global led
+
+    if _debug_:
+        print('** Blinking **')
+
+    led.value(1)
+    time.sleep_ms(blink_msec)
+    led.value(0)
+
+    if _debug_:
+        print('** Blinked **')
+
+
+def help():
+    if _debug_:
+        print('** Helping **')
+
+    """ Simple print a help message. """
+    print('''---------
+  Blink:
+
+    debug - toggle debug information
+    help  - this help messag
+    off   - turn blink off
+    on    - turn blink on
+    quit  - stop the application
+---------''')
+
+    if _debug_:
+        print('** Helped **')
+
+
+def off():
+    """
+    Simple function to switch the LED off.
+    """
+    global led
+
+    if _debug_:
+        print('** Switching off **')
+
+    timer.deinit()
+    print('Blink off')
+
+    if _debug_:
+        print('** Switched off **')
+
+
+
+def on():
+    """
+    Simple function to switch the LED on.
+    """
+    global led
     
-    led.value(1)
-    utime.sleep(0.5)
-    led.value(0)
-    utime.sleep(0.5)
-    led.value(1)
-    utime.sleep(0.5)
-    led.value(0)
-    utime.sleep(0.5)
-    led.value(1)
-    utime.sleep(0.5)
-    led.value(0)
-    utime.sleep(0.5)
-    led.value(1)
-    utime.sleep(5.0)
-    led.value(0)
+    if _debug_:
+        print('** Switching on **')
 
-    now = rtc.datetime()
-    light = 0
-    print(f'{now[0]:04n}-{now[1]:02n}-{now[2]:02n} {now[4]:02n}:{now[5]:02n}:{now[6]:02n} - Light: {light}')
+    timer.init(mode = Timer.PERIODIC, period=blink_msec * 2, callback=blink)
+    print('Blink on')
 
-
-def light_off():
-    global led, light
-
-    light = 0
-    led.value(0)
-
-
-def info():
-    print(f'''
-Board:   {board_name}
-Author:  {_author}
-Version: {_name} / {_version}
-
-Light:   {light}
-''')
+    if _debug_:
+        print('** Switched on **')
 
 
 def main():
-    while True:
-        light_on()
-        utime.sleep(8.0)
+    """
+    Main loop.
+    """
+    global _debug_
+    global line
+    global led
 
+    stopping = False
+    on()
+
+    while not stopping:
+        if (readln()):
+            if _debug_:
+                print(f'> {line}')
+
+            # Handle commands
+            if line == 'debug':
+                _debug_ = not _debug_
+                print(f'Debug: {_debug_}')
+            elif line == 'help':
+                help()
+            elif line == 'off':
+                off()
+            elif line == 'on':
+                on()
+            elif line == 'quit':
+                if _debug_:
+                    print('** Stopping **')
+                stopping = True
+                print('Quit')
+            else:
+                print(f'** Unknown command: {line}')
+
+            # Asume we are done
+            line = ''
+        else:
+            time.sleep(0.1)
+
+    if _debug_:
+        print('** Stopped **')
+    
 
 if __name__ == '__main__':
-    info()
-    main()    
-
+    main()
